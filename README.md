@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-This project demonstrates Infrastructure as Code (IaC) by using Terraform to provision a foundational AWS network infrastructure in the Mumbai region (`ap-south-1`).
+This project demonstrates Infrastructure as Code (IaC) by provisioning foundational AWS networking resources using Terraform in the Mumbai region (`ap-south-1`).
 
-The infrastructure includes an Amazon VPC, a public subnet, an Internet Gateway, a public route table, and a route table association. Resources are defined declaratively so that the infrastructure can be reviewed, version-controlled, and managed consistently.
+The project creates an Amazon VPC with public and private subnets, an Internet Gateway, separate route tables, and subnet associations. Terraform manages these resources declaratively, making infrastructure easier to reproduce, review, and maintain.
 
 ## Architecture
 
@@ -12,139 +12,158 @@ The infrastructure includes an Amazon VPC, a public subnet, an Internet Gateway,
 flowchart TD
     Internet((Internet))
     IGW[Internet Gateway]
-    RT[Public Route Table<br/>0.0.0.0/0]
-    Subnet[Public Subnet<br/>10.0.1.0/24]
-    VPC[VPC<br/>10.0.0.0/16]
+    VPC[VPC - 10.0.0.0/16]
+
+    PublicRT[Public Route Table<br/>0.0.0.0/0 via IGW]
+    PublicSubnet[Public Subnet<br/>10.0.1.0/24]
+
+    PrivateRT[Private Route Table<br/>No Internet Gateway route]
+    PrivateSubnet[Private Subnet<br/>10.0.2.0/24]
 
     Internet <--> IGW
     IGW --- VPC
-    VPC --- RT
-    RT --- Subnet
+    VPC --- PublicRT
+    PublicRT --- PublicSubnet
+    VPC --- PrivateRT
+    PrivateRT --- PrivateSubnet
 ```
 
-The Internet Gateway and default route provide an internet route for the public subnet. This does not, by itself, expose a workload to the internet; additional resources and security rules would be needed.
+**Network design:**
+- The VPC uses the CIDR range `10.0.0.0/16`.
+- The public subnet uses `10.0.1.0/24` and has a default IPv4 route through the Internet Gateway.
+- The private subnet uses `10.0.2.0/24` and has a separate route table without a route through an Internet Gateway or NAT Gateway.
+- A public IP assignment setting is enabled for instances launched in the public subnet. Actual internet connectivity also depends on security rules and other network configuration.
+- No EC2 instances, NAT Gateway, or application workloads are provisioned by this project.
 
 ## AWS Resources
 
-| Resource | Configuration |
+| Resource | Purpose |
 |---|---|
-| Amazon VPC | `10.0.0.0/16` |
-| Public subnet | `10.0.1.0/24` |
-| AWS Region | `ap-south-1` |
-| Internet Gateway | Attached to the VPC |
-| Public route table | Default IPv4 route through the Internet Gateway |
-| Route table association | Associates the route table with the public subnet |
+| Amazon VPC | Provides an isolated virtual network |
+| Public subnet | Subnet configured for public routing |
+| Private subnet | Subnet without a direct Internet Gateway route |
+| Internet Gateway | Provides an internet gateway attachment to the VPC |
+| Public route table | Routes `0.0.0.0/0` through the Internet Gateway |
+| Private route table | Provides separate routing for the private subnet |
+| Public route table association | Associates the public subnet with its route table |
+| Private route table association | Associates the private subnet with its route table |
 
 ## Technology Stack
 
-- AWS
+- Amazon Web Services (AWS)
 - Terraform
 - AWS CLI
 - Git and GitHub
 - Visual Studio Code
-- PowerShell
-
-## Prerequisites
-
-1. An AWS account with appropriately scoped IAM permissions.
-2. Terraform installed on your local machine.
-3. AWS CLI installed and configured.
-4. Git installed and connected to your GitHub account.
-
-Do not store AWS credentials in Terraform files or commit credentials, state files, or secret variable files to GitHub.
+- Windows PowerShell
 
 ## Project Structure
 
 ```text
 aws-infrastructure-terraform/
 ├── .gitignore
-├── providers.tf
+├── .terraform.lock.hcl
+├── README.md
 ├── main.tf
-├── variables.tf
 ├── outputs.tf
-└── README.md
+├── providers.tf
+└── variables.tf
 ```
 
-Terraform may also generate `terraform.lock.hcl`. Commit that file to version control to preserve provider selections.
+Terraform may generate additional local files, such as state files and the `.terraform/` working directory. These should not be committed to GitHub.
 
-## Setup and Validation
+## Prerequisites
 
-Clone the repository:
+1. An AWS account with appropriately scoped IAM permissions.
+2. Terraform installed.
+3. AWS CLI installed and configured.
+4. Git installed.
+5. An AWS CLI profile configured locally for Terraform.
+
+The provider configuration in this repository uses the AWS CLI profile named `terraform-user`. Configure that profile on your own machine or update `providers.tf` to use your preferred AWS authentication method.
+
+Never store AWS access keys or secret keys in Terraform files or commit them to GitHub.
+
+## Setup and Deployment
+
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/vishwakarmasuman/aws-infrastructure-terraform.git
 cd aws-infrastructure-terraform
 ```
 
-Initialize Terraform:
+### 2. Initialize Terraform
 
 ```bash
 terraform init
 ```
 
-Format and validate the configuration:
+### 3. Format and validate the configuration
 
 ```bash
 terraform fmt
 terraform validate
 ```
 
-Preview proposed changes:
+### 4. Review the planned changes
 
 ```bash
 terraform plan
 ```
 
-Review the plan carefully before provisioning any resources.
+Review the plan carefully before creating or changing any AWS resources.
 
-## Deployment
-
-Only after reviewing the plan, permissions, and potential AWS charges, deploy with:
+### 5. Deploy the infrastructure
 
 ```bash
 terraform apply
 ```
 
-Review the proposed actions and confirm only if they are expected.
+Review the proposed actions and confirm only when they match your expectations.
 
-Retrieve the outputs:
+### 6. View the outputs
 
 ```bash
 terraform output
 ```
 
+The configuration provides the VPC ID and the public and private subnet IDs.
+
 ## Cleanup
 
-When you no longer need the infrastructure, review the resources Terraform intends to remove:
+To preview the resources Terraform intends to remove:
 
 ```bash
 terraform plan -destroy
 ```
 
-If the plan is correct and you want to remove the resources managed by this configuration:
+If you intend to delete the infrastructure managed by this configuration:
 
 ```bash
 terraform destroy
 ```
 
-Review the plan and confirm before proceeding. Do not run destroy against shared or production infrastructure.
+Review the proposed deletions before confirming. Do not run these commands against shared or production infrastructure without authorization.
 
 ## Security and Cost Considerations
 
 - Use least-privilege IAM permissions.
-- Never commit access keys, secret keys, Terraform state, or sensitive variable files.
-- Review the AWS pricing and Free Tier eligibility for your account.
-- A VPC, subnet, route table, and Internet Gateway generally have no direct hourly charge, but other resources or related services may incur costs.
-- Keep the AWS region and resource tags consistent.
-- Do not deploy workloads with unrestricted inbound security-group rules.
+- Keep AWS credentials outside the repository.
+- Do not commit Terraform state files, saved plans, secret variable files, or private keys.
+- Review AWS pricing and account-specific Free Tier eligibility before deployment.
+- The listed networking resources generally have no direct hourly charge, but related services and additional resources may incur charges.
+- The private subnet has no NAT Gateway configured, so this configuration does not provide NAT-based outbound internet access.
+- Restrict inbound traffic when adding workloads and security groups.
 
 ## Learning Outcomes
 
 - Infrastructure as Code using Terraform.
-- AWS VPC and subnet fundamentals.
-- Internet Gateway and route table configuration.
-- Terraform initialization, validation, planning, and outputs.
-- Version control and project documentation with Git and GitHub.
+- AWS VPC and subnet design.
+- Public and private route table configuration.
+- Internet Gateway integration.
+- Terraform initialization, validation, planning, deployment, and outputs.
+- Git-based version control and project documentation.
 - Basic cloud security and cost awareness.
 
 ## Author
@@ -153,4 +172,4 @@ Review the plan and confirm before proceeding. Do not run destroy against shared
 
 GitHub: [@vishwakarmasuman](https://github.com/vishwakarmasuman)
 
-*This is a learning and portfolio project. Review the Terraform plan, security requirements, and AWS costs before deploying it.*
+*This is a learning and portfolio project. Review Terraform plans, permissions, security requirements, and potential AWS charges before deploying infrastructure.*
